@@ -34,27 +34,19 @@ const shuffle = (items) => {
 };
 
 function nextImpostor(room) {
-  const activeIds = new Set(room.players.map((player) => player.id));
-  room.impostorQueue = (room.impostorQueue || []).filter((playerId) => activeIds.has(playerId));
-  if (!room.impostorQueue.length) {
-    const roster = room.players.map((player) => player.id);
-    let queue;
-    let attempts = 0;
-    do {
-      queue = shuffle(roster);
-      attempts += 1;
-    } while (
-      attempts < 12 &&
-      (queue[0] === room.lastImpostorId ||
-        (roster.length >= 3 && queue.every((playerId, index) => playerId === roster[index])))
-    );
-    if (queue[0] === room.lastImpostorId && queue.length > 1) {
-      const swapIndex = 1 + randomInt(queue.length - 1);
-      [queue[0], queue[swapIndex]] = [queue[swapIndex], queue[0]];
-    }
-    room.impostorQueue = queue;
+  const candidates = room.players
+    .map((player) => player.id)
+    .filter((playerId) => room.players.length === 1 || playerId !== room.lastImpostorId);
+  return candidates[randomInt(candidates.length)];
+}
+
+function clueOrderFor(room) {
+  const order = shuffle(room.players.map((player) => player.id));
+  if (order.length > 1 && order[0] === room.impostorId) {
+    const swapIndex = 1 + randomInt(order.length - 1);
+    [order[0], order[swapIndex]] = [order[swapIndex], order[0]];
   }
-  return room.impostorQueue.shift();
+  return order;
 }
 
 function roomFor(req, payload) {
@@ -102,12 +94,12 @@ function publicState(room, viewer) {
 
 function startRound(room) {
   const source = room.customWords.length ? room.customWords : Object.entries(PACKS).flatMap(([category, words]) => words.map((word) => ({ category, word })));
-  const pick = source[Math.floor(Math.random() * source.length)];
+  const pick = source[randomInt(source.length)];
   room.category = pick.category;
   room.word = pick.word;
   room.impostorId = nextImpostor(room);
   room.lastImpostorId = room.impostorId;
-  room.turnOrder = shuffle(room.players.map((p) => p.id));
+  room.turnOrder = clueOrderFor(room);
   room.turnIndex = 0;
   room.clues = [];
   room.clueRound = 1;
@@ -190,7 +182,7 @@ const actions = {
       const voteCount = room.players.length - anotherCount;
       if (anotherCount > voteCount) {
         room.clueRound += 1;
-        room.turnOrder = shuffle(room.players.map((candidate) => candidate.id));
+        room.turnOrder = clueOrderFor(room);
         room.turnIndex = 0;
         room.decisions = new Map();
         room.phase = "clues";
