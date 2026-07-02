@@ -21,9 +21,11 @@ button { border:0; cursor:pointer; border-radius:15px; padding:15px 18px; font-w
 button:active { transform:scale(.97); }
 .primary { background:var(--acid); color:#151713; }
 .secondary { background:#292d3d; color:var(--ink); border:1px solid #3b4053; }
+.danger { background:#3b2029; color:#ffd7df; border:1px solid #ff6b6b66; }
 .ghost { background:transparent; color:var(--muted); padding:10px; }
 .mini { padding:8px 11px; border-radius:11px; font-size:12px; }
 .danger-text { color:var(--red); }
+.selected-action { border-color:var(--acid); color:var(--acid); }
 label { display:grid; gap:7px; font-size:13px; color:var(--muted); font-weight:600; }
 input,textarea { width:100%; color:var(--ink); background:#11131d; border:1px solid var(--line); border-radius:14px; padding:14px 15px; outline:none; }
 input:focus,textarea:focus { border-color:var(--purple); box-shadow:0 0 0 3px #9b8cff22; }
@@ -33,6 +35,11 @@ textarea { min-height:90px; resize:vertical; }
 .room-code { background:#262a38; border:1px solid var(--line); border-radius:99px; padding:7px 12px; font-weight:700; letter-spacing:.1em; }
 .player-list { display:grid; gap:9px; margin:22px 0; }
 .player { display:flex; align-items:center; gap:12px; padding:12px; background:#222633; border:1px solid var(--line); border-radius:14px; }
+.player-main { min-width:0; flex:1; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.player-actions { margin-left:auto; display:flex; gap:7px; flex-wrap:wrap; justify-content:flex-end; }
+.manage-panel { margin:-18px 0 24px; padding:14px 16px; }
+.manage-list { display:grid; gap:8px; margin-top:12px; }
+.manage-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px; border-radius:12px; background:#222633; }
 .avatar { width:35px; height:35px; display:grid; place-items:center; border-radius:12px; background:var(--purple); color:#171522; font-weight:800; }
 .host { margin-left:auto; color:var(--acid); font-size:11px; font-weight:700; letter-spacing:.08em; }
 .secret { text-align:center; padding:34px 20px; margin:20px 0; overflow:hidden; position:relative; }
