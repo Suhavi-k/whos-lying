@@ -1,0 +1,267 @@
+import http from "node:http";
+import { readFile } from "node:fs/promises";
+import { extname, join, normalize } from "node:path";
+import { randomBytes, randomInt } from "node:crypto";
+import { fileURLToPath } from "node:url";
+
+const PORT = Number(process.env.PORT || 3000);
+const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "public");
+const rooms = new Map();
+
+const PACKS = {
+  "Everyday Things": ["Umbrella", "Toothbrush", "Backpack", "Mirror", "Candle", "Pillow", "Key", "Scissors", "Clock", "Sunglasses"],
+  "Food & Drink": ["Pizza", "Sushi", "Popcorn", "Pancake", "Lemonade", "Chocolate", "Burger", "Mango", "Coffee", "Noodles"],
+  "Places": ["Airport", "Library", "Beach", "Hospital", "Museum", "Cinema", "School", "Zoo", "Restaurant", "Stadium"],
+  "Animals": ["Penguin", "Octopus", "Giraffe", "Dolphin", "Kangaroo", "Butterfly", "Panda", "Crocodile", "Owl", "Rabbit"],
+  "Entertainment": ["Superhero", "Karaoke", "Video game", "Magic trick", "Cartoon", "Concert", "Podcast", "Board game", "Movie", "Circus"]
+};
+
+const id = (n = 18) => randomBytes(n).toString("base64url");
+const code = () => {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let result;
+  do result = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join(""); while (rooms.has(result));
+  return result;
+};
+const clean = (value, max = 30) => String(value ?? "").trim().replace(/\s+/g, " ").slice(0, max);
+const shuffle = (items) => {
+  const result = [...items];
+  for (let index = result.length - 1; index > 0; index--) {
+    const swapIndex = randomInt(index + 1);
+    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+  }
+  return result;
+};
+
+function nextImpostor(room) {
+  const activeIds = new Set(room.players.map((player) => player.id));
+  room.impostorQueue = (room.impostorQueue || []).filter((playerId) => activeIds.has(playerId));
+  if (!room.impostorQueue.length) {
+    const roster = room.players.map((player) => player.id);
+    let queue;
+    let attempts = 0;
+    do {
+      queue = shuffle(roster);
+      attempts += 1;
+    } while (
+      attempts < 12 &&
+      (queue[0] === room.lastImpostorId ||
+        (roster.length >= 3 && queue.every((playerId, index) => playerId === roster[index])))
+    );
+    if (queue[0] === room.lastImpostorId && queue.length > 1) {
+      const swapIndex = 1 + randomInt(queue.length - 1);
+      [queue[0], queue[swapIndex]] = [queue[swapIndex], queue[0]];
+    }
+    room.impostorQueue = queue;
+  }
+  return room.impostorQueue.shift();
+}
+
+function roomFor(req, payload) {
+  const room = rooms.get(clean(payload.code, 4).toUpperCase());
+  if (!room) throw Error("Room not found");
+  const player = room.players.find((p) => p.token === payload.token);
+  if (!player) throw Error("You are no longer in this room");
+  return { room, player };
+}
+
+function publicState(room, viewer) {
+  if (room.phase === "reveal" && room.revealEndsAt && Date.now() >= room.revealEndsAt) room.phase = "clues";
+  const myTurn = room.phase === "clues" && room.turnOrder[room.turnIndex] === viewer.id;
+  const voted = room.votes.has(viewer.id);
+  const base = {
+    code: room.code,
+    phase: room.phase,
+    hostId: room.hostId,
+    me: { id: viewer.id, name: viewer.name },
+    players: room.players.map((p) => ({ id: p.id, name: p.name, connected: true })),
+    settings: room.settings,
+    category: room.phase === "lobby" ? null : room.category,
+    role: room.phase === "lobby" ? null : viewer.id === room.impostorId ? "impostor" : "player",
+    word: room.phase === "lobby" || viewer.id === room.impostorId ? null : room.word,
+    clues: room.clues,
+    clueRound: room.clueRound,
+    turnPlayerId: room.phase === "clues" ? room.turnOrder[room.turnIndex] : null,
+    myTurn,
+    voted,
+    votesCast: room.votes.size,
+    decided: room.decisions?.has(viewer.id) || false,
+    decisionCount: room.decisions?.size || 0,
+    result: room.result,
+    ready: room.readyIds?.has(viewer.id) || false,
+    readyCount: room.readyIds?.size || 0,
+    revealEndsAt: room.phase === "reveal" ? room.revealEndsAt : null
+  };
+  if (room.phase === "result") {
+    base.word = room.word;
+    base.impostorId = room.impostorId;
+    base.voteCounts = Object.fromEntries(room.players.map((p) => [p.id, [...room.votes.values()].filter((v) => v === p.id).length]));
+  }
+  return base;
+}
+
+function startRound(room) {
+  const source = room.customWords.length ? room.customWords : Object.entries(PACKS).flatMap(([category, words]) => words.map((word) => ({ category, word })));
+  const pick = source[Math.floor(Math.random() * source.length)];
+  room.category = pick.category;
+  room.word = pick.word;
+  room.impostorId = nextImpostor(room);
+  room.lastImpostorId = room.impostorId;
+  room.turnOrder = shuffle(room.players.map((p) => p.id));
+  room.turnIndex = 0;
+  room.clues = [];
+  room.clueRound = 1;
+  room.votes = new Map();
+  room.decisions = new Map();
+  room.readyIds = new Set();
+  room.revealEndsAt = Date.now() + 6000;
+  room.result = null;
+  room.phase = "reveal";
+}
+
+const actions = {
+  create(payload) {
+    const name = clean(payload.name);
+    if (!name) throw Error("Enter your name");
+    const roomCode = code();
+    const player = { id: id(8), token: id(), name };
+    rooms.set(roomCode, { code: roomCode, hostId: player.id, players: [player], phase: "lobby", settings: { maxPlayers: 10 }, customWords: [], category: null, word: null, impostorId: null, lastImpostorId: null, impostorQueue: [], turnOrder: [], turnIndex: 0, clues: [], clueRound: 1, votes: new Map(), decisions: new Map(), readyIds: new Set(), revealEndsAt: null, result: null, updatedAt: Date.now() });
+    return { code: roomCode, token: player.token };
+  },
+  join(payload) {
+    const room = rooms.get(clean(payload.code, 4).toUpperCase());
+    const name = clean(payload.name);
+    if (!room) throw Error("That room doesn’t exist");
+    if (room.phase !== "lobby") throw Error("That game has already started");
+    if (!name) throw Error("Enter your name");
+    if (room.players.length >= room.settings.maxPlayers) throw Error("That room is full");
+    if (room.players.some((p) => p.name.toLowerCase() === name.toLowerCase())) throw Error("That name is already taken");
+    const player = { id: id(8), token: id(), name };
+    room.players.push(player); room.updatedAt = Date.now();
+    return { code: room.code, token: player.token };
+  },
+  state(payload) {
+    const { room, player } = roomFor(null, payload);
+    return publicState(room, player);
+  },
+  customize(payload) {
+    const { room, player } = roomFor(null, payload);
+    if (player.id !== room.hostId || room.phase !== "lobby") throw Error("Only the host can change the word pack");
+    const category = clean(payload.category, 40);
+    const words = String(payload.words ?? "").split(/[,\n]/).map((w) => clean(w, 50)).filter(Boolean);
+    if (!category || words.length < 3) throw Error("Add a category and at least 3 words");
+    room.customWords = words.map((word) => ({ category, word }));
+    return { ok: true, count: words.length };
+  },
+  start(payload) {
+    const { room, player } = roomFor(null, payload);
+    if (player.id !== room.hostId) throw Error("Only the host can start");
+    if (room.players.length < 3) throw Error("You need at least 3 players");
+    startRound(room); return { ok: true };
+  },
+  ready(payload) {
+    const { room } = roomFor(null, payload);
+    if (room.phase !== "reveal") throw Error("The round has moved on");
+    return { ok: true };
+  },
+  clue(payload) {
+    const { room, player } = roomFor(null, payload);
+    if (room.phase !== "clues" || room.turnOrder[room.turnIndex] !== player.id) throw Error("It isn’t your turn");
+    const text = clean(payload.clue, 80);
+    if (!text) throw Error("Enter a clue");
+    if (text.toLowerCase() === room.word.toLowerCase()) throw Error("You can’t say the secret word");
+    room.clues.push({ playerId: player.id, name: player.name, text, round: room.clueRound });
+    room.turnIndex += 1;
+    if (room.turnIndex >= room.turnOrder.length) {
+      room.decisions = new Map();
+      room.phase = "decision";
+    }
+    return { ok: true };
+  },
+  decide(payload) {
+    const { room, player } = roomFor(null, payload);
+    if (room.phase !== "decision") throw Error("The group has already decided");
+    if (room.decisions.has(player.id)) throw Error("You already chose");
+    const choice = payload.choice === "clues" ? "clues" : payload.choice === "vote" ? "vote" : null;
+    if (!choice) throw Error("Choose another clue round or vote now");
+    room.decisions.set(player.id, choice);
+    if (room.decisions.size === room.players.length) {
+      const anotherCount = [...room.decisions.values()].filter((value) => value === "clues").length;
+      const voteCount = room.players.length - anotherCount;
+      if (anotherCount > voteCount) {
+        room.clueRound += 1;
+        room.turnOrder = shuffle(room.players.map((candidate) => candidate.id));
+        room.turnIndex = 0;
+        room.decisions = new Map();
+        room.phase = "clues";
+      } else {
+        room.phase = "voting";
+      }
+    }
+    return { ok: true };
+  },
+  vote(payload) {
+    const { room, player } = roomFor(null, payload);
+    if (room.phase !== "voting") throw Error("Voting isn’t open");
+    if (room.votes.has(player.id)) throw Error("You already voted");
+    const target = room.players.find((p) => p.id === payload.targetId);
+    if (!target || target.id === player.id) throw Error("Choose another player");
+    room.votes.set(player.id, target.id);
+    if (room.votes.size === room.players.length) {
+      const counts = room.players.map((p) => ({ id: p.id, count: [...room.votes.values()].filter((v) => v === p.id).length }));
+      const max = Math.max(...counts.map((x) => x.count));
+      const top = counts.filter((x) => x.count === max);
+      room.result = { winner: top.length === 1 && top[0].id === room.impostorId ? "players" : "impostor", tie: top.length > 1 };
+      room.phase = "result";
+    }
+    return { ok: true };
+  },
+  again(payload) {
+    const { room, player } = roomFor(null, payload);
+    if (player.id !== room.hostId) throw Error("Only the host can start another round");
+    room.phase = "lobby"; room.category = null; room.word = null; room.impostorId = null; room.revealEndsAt = null; room.clues = []; room.clueRound = 1; room.votes = new Map(); room.decisions = new Map(); room.result = null;
+    return { ok: true };
+  }
+};
+
+async function api(req, res) {
+  let body = "";
+  for await (const chunk of req) body += chunk;
+  try {
+    const payload = body ? JSON.parse(body) : {};
+    const action = req.url.split("/").pop();
+    if (!actions[action]) throw Error("Unknown action");
+    const result = actions[action](payload);
+    res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+    res.end(JSON.stringify(result));
+  } catch (error) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: error.message }));
+  }
+}
+
+const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml", ".png": "image/png" };
+http.createServer(async (req, res) => {
+  if (req.method === "GET" && req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+    return res.end(JSON.stringify({ status: "ok", rooms: rooms.size }));
+  }
+  if (req.method === "POST" && req.url.startsWith("/api/")) return api(req, res);
+  const requested = req.url === "/" ? "index.html" : req.url.split("?")[0].slice(1);
+  const file = normalize(join(ROOT, requested));
+  if (!file.startsWith(ROOT)) { res.writeHead(403); return res.end("Forbidden"); }
+  try {
+    const data = await readFile(file);
+    res.writeHead(200, {
+      "Content-Type": types[extname(file)] || "application/octet-stream",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "same-origin",
+      "Cache-Control": extname(file) === ".html" ? "no-cache" : "public, max-age=3600"
+    }); res.end(data);
+  } catch { res.writeHead(404); res.end("Not found"); }
+}).listen(PORT, "0.0.0.0", () => console.log(`Who’s Lying is ready at http://localhost:${PORT}`));
+
+setInterval(() => {
+  const cutoff = Date.now() - 6 * 60 * 60 * 1000;
+  for (const [key, room] of rooms) if (room.updatedAt < cutoff) rooms.delete(key);
+}, 60 * 60 * 1000).unref();
