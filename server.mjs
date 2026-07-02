@@ -82,6 +82,9 @@ function publicState(room, viewer) {
     result: room.result,
     ready: room.readyIds?.has(viewer.id) || false,
     readyCount: room.readyIds?.size || 0,
+    kickThreshold: Math.floor(room.players.length / 2) + 1,
+    myKickVoteTarget: [...(room.kickVotes || new Map()).entries()].find(([, voters]) => voters.has(viewer.id))?.[0] || null,
+    kickVotes: Object.fromEntries(room.players.map((p) => [p.id, room.kickVotes?.get(p.id)?.size || 0])),
     revealEndsAt: room.phase === "reveal" ? room.revealEndsAt : null
   };
   if (room.phase === "result") {
@@ -105,8 +108,27 @@ function resetToLobby(room) {
   room.votes = new Map();
   room.decisions = new Map();
   room.readyIds = new Set();
+  room.kickVotes = new Map();
   room.result = null;
   room.updatedAt = Date.now();
+}
+
+function removePlayer(room, targetId) {
+  const targetIndex = room.players.findIndex((player) => player.id === targetId);
+  if (targetIndex === -1) throw Error("Player not found");
+  const [target] = room.players.splice(targetIndex, 1);
+  room.votes?.delete(target.id);
+  room.decisions?.delete(target.id);
+  room.readyIds?.delete(target.id);
+  room.kickVotes?.delete(target.id);
+  for (const voters of room.kickVotes?.values() || []) voters.delete(target.id);
+  if (!room.players.length) {
+    rooms.delete(room.code);
+    return target;
+  }
+  if (room.hostId === target.id) room.hostId = room.players[0].id;
+  resetToLobby(room);
+  return target;
 }
 
 function startRound(room) {
@@ -134,7 +156,7 @@ const actions = {
     if (!name) throw Error("Enter your name");
     const roomCode = code();
     const player = { id: id(8), token: id(), name };
-    rooms.set(roomCode, { code: roomCode, hostId: player.id, players: [player], phase: "lobby", settings: { maxPlayers: 10 }, customWords: [], category: null, word: null, impostorId: null, lastImpostorId: null, impostorQueue: [], turnOrder: [], turnIndex: 0, clues: [], clueRound: 1, votes: new Map(), decisions: new Map(), readyIds: new Set(), revealEndsAt: null, result: null, updatedAt: Date.now() });
+    rooms.set(roomCode, { code: roomCode, hostId: player.id, players: [player], phase: "lobby", settings: { maxPlayers: 10 }, customWords: [], category: null, word: null, impostorId: null, lastImpostorId: null, impostorQueue: [], turnOrder: [], turnIndex: 0, clues: [], clueRound: 1, votes: new Map(), decisions: new Map(), readyIds: new Set(), kickVotes: new Map(), revealEndsAt: null, result: null, updatedAt: Date.now() });
     return { code: roomCode, token: player.token };
   },
   join(payload) {
@@ -151,6 +173,7 @@ const actions = {
   },
   state(payload) {
     const { room, player } = roomFor(null, payload);
+    room.kickVotes ||= new Map();
     return publicState(room, player);
   },
   leave(payload) {
@@ -159,13 +182,7 @@ const actions = {
     if (!room) return { ok: true, left: true };
     const playerIndex = room.players.findIndex((p) => p.token === payload.token);
     if (playerIndex === -1) return { ok: true, left: true };
-    const [player] = room.players.splice(playerIndex, 1);
-    if (!room.players.length) {
-      rooms.delete(roomCode);
-      return { ok: true, left: true };
-    }
-    if (room.hostId === player.id) room.hostId = room.players[0].id;
-    resetToLobby(room);
+    removePlayer(room, room.players[playerIndex].id);
     return { ok: true, left: true };
   },
   lobby(payload) {
@@ -173,6 +190,34 @@ const actions = {
     if (player.id !== room.hostId) throw Error("Only the host can go back to the lobby");
     resetToLobby(room);
     return { ok: true };
+  },
+  kick(payload) {
+    const { room, player } = roomFor(null, payload);
+    if (player.id !== room.hostId) throw Error("Only the host can kick players");
+    const targetId = String(payload.targetId || "");
+    if (!targetId || targetId === player.id) throw Error("Choose another player");
+    const target = room.players.find((p) => p.id === targetId);
+    if (!target) throw Error("Player not found");
+    removePlayer(room, target.id);
+    return { ok: true, kicked: target.name };
+  },
+  votekick(payload) {
+    const { room, player } = roomFor(null, payload);
+    const targetId = String(payload.targetId || "");
+    if (!targetId || targetId === player.id) throw Error("Choose another player");
+    const target = room.players.find((p) => p.id === targetId);
+    if (!target) throw Error("Player not found");
+    room.kickVotes ||= new Map();
+    for (const voters of room.kickVotes.values()) voters.delete(player.id);
+    if (!room.kickVotes.has(target.id)) room.kickVotes.set(target.id, new Set());
+    room.kickVotes.get(target.id).add(player.id);
+    const threshold = Math.floor(room.players.length / 2) + 1;
+    if (room.kickVotes.get(target.id).size >= threshold) {
+      removePlayer(room, target.id);
+      return { ok: true, kicked: target.name };
+    }
+    room.updatedAt = Date.now();
+    return { ok: true, votes: room.kickVotes.get(target.id).size, threshold };
   },
   customize(payload) {
     const { room, player } = roomFor(null, payload);
