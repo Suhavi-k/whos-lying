@@ -3,6 +3,7 @@ const toast = document.querySelector("#toast");
 let session = JSON.parse(localStorage.getItem("lying-session") || "null");
 let state = null;
 let poller = null;
+let revealFrame = null;
 let selectedVote = null;
 let lastRender = "";
 
@@ -40,7 +41,8 @@ function reveal() {
   const imp = state.role === "impostor";
   const remaining = Math.max(0, state.revealEndsAt - Date.now());
   const progress = Math.max(0, Math.min(1, remaining / 6000));
-  app.innerHTML = shell(`<section class="center"><div class="eyebrow">Your secret role</div><h2>${imp ? "Keep your cool." : "Choose your clue."}</h2><div class="card secret ${imp ? "impostor" : ""}"><span class="pill">${imp ? "YOU ARE THE IMPOSTOR" : esc(state.category)}</span><div class="word">${imp ? esc(state.category) : esc(state.word)}</div><p>${imp ? "You only know the category. Listen closely and blend in." : "Don’t say the word itself. Be helpful—but not too helpful."}</p></div><div class="auto-next"><span>Next: clue round</span><div class="countdown"><i style="transform:scaleX(${progress});animation-duration:${remaining}ms"></i></div></div></section>`);
+  app.innerHTML = shell(`<section class="center"><div class="eyebrow">Your secret role</div><h2>${imp ? "Keep your cool." : "Choose your clue."}</h2><div class="card secret ${imp ? "impostor" : ""}"><span class="pill">${imp ? "YOU ARE THE IMPOSTOR" : esc(state.category)}</span><div class="word">${imp ? esc(state.category) : esc(state.word)}</div><p>${imp ? "You only know the category. Listen closely and blend in." : "Don’t say the word itself. Be helpful—but not too helpful."}</p></div><div class="auto-next"><span>Next: clue round</span><div class="countdown"><i id="reveal-countdown-bar" style="transform:scaleX(${progress})"></i></div></div></section>`);
+  startRevealCountdown(state.revealEndsAt);
 }
 function clues() {
   const turn = state.players.find((p) => p.id === state.turnPlayerId);
@@ -69,7 +71,29 @@ function result() {
   app.innerHTML = shell(`<section class="center"><div class="result-icon">${won ? "🕵️" : "🎭"}</div><div class="eyebrow">${won ? "Case closed" : "Fooled you"}</div><h2>${won ? "Players win!" : "Impostor wins!"}</h2><p style="margin:10px 0 22px"><strong>${esc(imp.name)}</strong> was the impostor. The word was <strong>${esc(state.word)}</strong>.</p><div class="card stack" style="text-align:left">${state.players.map((p) => `<div><div style="display:flex;justify-content:space-between"><span>${esc(p.name)}${p.id === state.impostorId ? " 🎭" : ""}</span><strong>${state.voteCounts[p.id]} vote${state.voteCounts[p.id] === 1 ? "" : "s"}</strong></div><div class="score"><i style="width:${state.voteCounts[p.id] / max * 100}%"></i></div></div>`).join("")}</div>${state.me.id === state.hostId ? '<button class="primary" id="again" style="width:100%;margin-top:14px">Play another round</button>' : '<p style="margin-top:18px">Waiting for the host to start another round.</p>'}</section>`);
   if (state.me.id === state.hostId) document.querySelector("#again").onclick = () => act("again");
 }
-function render() { ({ lobby, reveal, clues, decision, voting, result }[state.phase] || home)(); }
+function startRevealCountdown(endsAt) {
+  if (revealFrame) cancelAnimationFrame(revealFrame);
+  const tick = () => {
+    const bar = document.querySelector("#reveal-countdown-bar");
+    if (!bar) return;
+    const progress = Math.max(0, Math.min(1, (endsAt - Date.now()) / 6000));
+    bar.style.transform = `scaleX(${progress})`;
+    if (progress > 0) {
+      revealFrame = requestAnimationFrame(tick);
+    } else {
+      revealFrame = null;
+      refresh();
+    }
+  };
+  tick();
+}
+function render() {
+  if (revealFrame) {
+    cancelAnimationFrame(revealFrame);
+    revealFrame = null;
+  }
+  ({ lobby, reveal, clues, decision, voting, result }[state.phase] || home)();
+}
 async function refresh() { if (!session) return home(); try { const next = await api("state"); const signature = JSON.stringify(next); state = next; if (signature !== lastRender) { lastRender = signature; render(); } } catch(e) { stopPolling(); session = null; localStorage.removeItem("lying-session"); notify(e.message); home(); } }
 function startPolling() { stopPolling(); poller = setInterval(refresh, 1400); }
 function stopPolling() { if (poller) clearInterval(poller); poller = null; }
