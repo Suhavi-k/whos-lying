@@ -92,6 +92,23 @@ function publicState(room, viewer) {
   return base;
 }
 
+function resetToLobby(room) {
+  room.phase = "lobby";
+  room.category = null;
+  room.word = null;
+  room.impostorId = null;
+  room.revealEndsAt = null;
+  room.turnOrder = [];
+  room.turnIndex = 0;
+  room.clues = [];
+  room.clueRound = 1;
+  room.votes = new Map();
+  room.decisions = new Map();
+  room.readyIds = new Set();
+  room.result = null;
+  room.updatedAt = Date.now();
+}
+
 function startRound(room) {
   const source = room.customWords.length ? room.customWords : Object.entries(PACKS).flatMap(([category, words]) => words.map((word) => ({ category, word })));
   const pick = source[randomInt(source.length)];
@@ -135,6 +152,27 @@ const actions = {
   state(payload) {
     const { room, player } = roomFor(null, payload);
     return publicState(room, player);
+  },
+  leave(payload) {
+    const roomCode = clean(payload.code, 4).toUpperCase();
+    const room = rooms.get(roomCode);
+    if (!room) return { ok: true, left: true };
+    const playerIndex = room.players.findIndex((p) => p.token === payload.token);
+    if (playerIndex === -1) return { ok: true, left: true };
+    const [player] = room.players.splice(playerIndex, 1);
+    if (!room.players.length) {
+      rooms.delete(roomCode);
+      return { ok: true, left: true };
+    }
+    if (room.hostId === player.id) room.hostId = room.players[0].id;
+    resetToLobby(room);
+    return { ok: true, left: true };
+  },
+  lobby(payload) {
+    const { room, player } = roomFor(null, payload);
+    if (player.id !== room.hostId) throw Error("Only the host can go back to the lobby");
+    resetToLobby(room);
+    return { ok: true };
   },
   customize(payload) {
     const { room, player } = roomFor(null, payload);
@@ -211,7 +249,7 @@ const actions = {
   again(payload) {
     const { room, player } = roomFor(null, payload);
     if (player.id !== room.hostId) throw Error("Only the host can start another round");
-    room.phase = "lobby"; room.category = null; room.word = null; room.impostorId = null; room.revealEndsAt = null; room.clues = []; room.clueRound = 1; room.votes = new Map(); room.decisions = new Map(); room.result = null;
+    resetToLobby(room);
     return { ok: true };
   }
 };
