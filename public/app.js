@@ -39,7 +39,8 @@ function lobby() {
 function reveal() {
   const imp = state.role === "impostor";
   const remaining = Math.max(0, state.revealEndsAt - Date.now());
-  app.innerHTML = shell(`<section class="center"><div class="eyebrow">Your secret role</div><h2>${imp ? "Keep your cool." : "Choose your clue."}</h2><div class="card secret ${imp ? "impostor" : ""}"><span class="pill">${imp ? "YOU ARE THE IMPOSTOR" : esc(state.category)}</span><div class="word">${imp ? esc(state.category) : esc(state.word)}</div><p>${imp ? "You only know the category. Listen closely and blend in." : "Don’t say the word itself. Be helpful—but not too helpful."}</p></div><div class="auto-next"><span>Clues begin automatically</span><div class="countdown"><i style="animation-duration:${remaining}ms"></i></div></div></section>`);
+  const progress = Math.max(0, Math.min(1, remaining / 6000));
+  app.innerHTML = shell(`<section class="center"><div class="eyebrow">Your secret role</div><h2>${imp ? "Keep your cool." : "Choose your clue."}</h2><div class="card secret ${imp ? "impostor" : ""}"><span class="pill">${imp ? "YOU ARE THE IMPOSTOR" : esc(state.category)}</span><div class="word">${imp ? esc(state.category) : esc(state.word)}</div><p>${imp ? "You only know the category. Listen closely and blend in." : "Don’t say the word itself. Be helpful—but not too helpful."}</p></div><div class="auto-next"><span>Next: clue round</span><div class="countdown"><i style="transform:scaleX(${progress});animation-duration:${remaining}ms"></i></div></div></section>`);
 }
 function clues() {
   const turn = state.players.find((p) => p.id === state.turnPlayerId);
@@ -47,7 +48,7 @@ function clues() {
     ? `<div class="round-reference impostor-ref"><span>Category</span><strong>${esc(state.category)}</strong><small>Secret word unknown</small></div>`
     : `<div class="round-reference"><span>${esc(state.category)}</span><strong>${esc(state.word)}</strong></div>`;
   const currentClues = state.clues.filter((clue) => clue.round === state.clueRound);
-  app.innerHTML = shell(`<section><div class="eyebrow">Clue round ${state.clueRound}</div><h2>Say just enough.</h2>${reference}<div class="turn"><span class="pulse"></span><div><span class="tiny">CURRENT TURN</span><br><strong>${esc(turn?.name)}${state.myTurn ? " — that’s you!" : ""}</strong></div></div>${currentClues.length ? `<div class="clues">${currentClues.map((c) => `<div class="clue"><strong>${esc(c.name)}</strong><span>${esc(c.text)}</span></div>`).join("")}</div>` : ""}${state.myTurn ? `<div class="card stack"><label>Your clue<input id="clue" maxlength="80" placeholder="A related word or short phrase"></label><button class="primary" id="submit-clue">Lock in clue</button></div>` : `<div class="card center"><p>Watch their face. Overthinking is suspicious.</p></div>`}</section>`);
+  app.innerHTML = shell(`<section><div class="eyebrow">Clue round ${state.clueRound}</div><h2>Say just enough.</h2>${reference}<div class="turn"><span class="pulse"></span><div><span class="tiny">CURRENT TURN</span><br><strong>${esc(turn?.name)}${state.myTurn ? " — that’s you!" : ""}</strong></div></div>${currentClues.length ? `<div class="clues">${currentClues.map((c) => `<div class="clue"><strong>${esc(c.name)}</strong><span>${esc(c.text)}</span></div>`).join("")}</div>` : ""}${state.myTurn ? `<div class="card stack"><label>Your clue<input id="clue" maxlength="80" placeholder="A related word or short phrase"></label><button class="primary" id="submit-clue">Lock in clue</button></div>` : `<div class="card center"><p>Waiting for the current clue.</p></div>`}</section>`);
   if (state.myTurn) document.querySelector("#submit-clue").onclick = () => act("clue", { clue:document.querySelector("#clue").value });
 }
 function decision() {
