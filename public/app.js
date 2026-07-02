@@ -3,7 +3,6 @@ const toast = document.querySelector("#toast");
 let session = JSON.parse(localStorage.getItem("lying-session") || "null");
 let state = null;
 let poller = null;
-let revealFrame = null;
 let selectedVote = null;
 let lastRender = "";
 
@@ -17,6 +16,16 @@ async function api(action, data = {}) {
   return json;
 }
 async function act(action, data) { try { await api(action, data); await refresh(); } catch (e) { notify(e.message); } }
+async function leaveGame() {
+  try { await api("leave"); } catch {}
+  stopPolling();
+  session = null;
+  state = null;
+  selectedVote = null;
+  lastRender = "";
+  localStorage.removeItem("lying-session");
+  home();
+}
 
 function home() {
   stopPolling();
@@ -28,7 +37,12 @@ function entry(mode) {
   document.querySelector("#back").onclick = home;
   document.querySelector("#go").onclick = async () => { try { const result = await api(mode, { name:document.querySelector("#name").value, code:document.querySelector("#code")?.value }); session = result; localStorage.setItem("lying-session", JSON.stringify(session)); await refresh(); startPolling(); } catch(e) { notify(e.message); } };
 }
-function shell(content) { return `<header class="top">${brand}<span class="room-code">${esc(state.code)}</span></header>${content}`; }
+function shell(content) {
+  const hostControls = state.me.id === state.hostId && state.phase !== "lobby"
+    ? `<button class="mini secondary" id="back-lobby">Lobby</button>`
+    : "";
+  return `<header class="top">${brand}<div class="room-tools"><span class="room-code">${esc(state.code)}</span>${hostControls}<button class="mini ghost danger-text" id="leave-game">Leave</button></div></header>${content}`;
+}
 function lobby() {
   const host = state.me.id === state.hostId;
   app.innerHTML = shell(`<section><div class="eyebrow">Room ${esc(state.code)}</div><h2>The suspects</h2><p>Share the code. You need at least 3 players.</p><div class="player-list">${state.players.map((p) => `<div class="player"><span class="avatar">${esc(p.name[0].toUpperCase())}</span><strong>${esc(p.name)}${p.id === state.me.id ? " (you)" : ""}</strong>${p.id === state.hostId ? '<span class="host">HOST</span>' : ""}</div>`).join("")}</div>${host ? `<details class="card"><summary><strong>Use a custom word pack</strong></summary><div class="stack" style="margin-top:16px"><label>Category<input id="custom-category" placeholder="e.g. Bollywood"></label><label>Words<textarea id="custom-words" placeholder="One per line or separated by commas"></textarea></label><button class="secondary" id="save-pack">Save custom pack</button></div></details><button class="primary" id="start" style="width:100%;margin-top:14px">Start game</button>` : `<div class="card center"><span class="pill">Waiting for the host</span><p style="margin-top:10px">The game will begin soon.</p></div>`}</section>`);
@@ -39,10 +53,7 @@ function lobby() {
 }
 function reveal() {
   const imp = state.role === "impostor";
-  const remaining = Math.max(0, state.revealEndsAt - Date.now());
-  const progress = Math.max(0, Math.min(1, remaining / 6000));
-  app.innerHTML = shell(`<section class="center"><div class="eyebrow">Your secret role</div><h2>${imp ? "Keep your cool." : "Choose your clue."}</h2><div class="card secret ${imp ? "impostor" : ""}"><span class="pill">${imp ? "YOU ARE THE IMPOSTOR" : esc(state.category)}</span><div class="word">${imp ? esc(state.category) : esc(state.word)}</div><p>${imp ? "You only know the category. Listen closely and blend in." : "Don’t say the word itself. Be helpful—but not too helpful."}</p></div><div class="auto-next"><span>Next: clue round</span><div class="countdown"><i id="reveal-countdown-bar" style="transform:scaleX(${progress})"></i></div></div></section>`);
-  startRevealCountdown(state.revealEndsAt);
+  app.innerHTML = shell(`<section class="center"><div class="eyebrow">Your secret role</div><h2>${imp ? "Keep your cool." : "Choose your clue."}</h2><div class="card secret ${imp ? "impostor" : ""}"><span class="pill">${imp ? "YOU ARE THE IMPOSTOR" : esc(state.category)}</span><div class="word">${imp ? esc(state.category) : esc(state.word)}</div><p>${imp ? "You only know the category. Listen closely and blend in." : "Don’t say the word itself. Be helpful—but not too helpful."}</p></div><div class="auto-next"><span>Next: clue round</span></div></section>`);
 }
 function clues() {
   const turn = state.players.find((p) => p.id === state.turnPlayerId);
@@ -71,28 +82,15 @@ function result() {
   app.innerHTML = shell(`<section class="center"><div class="result-icon">${won ? "🕵️" : "🎭"}</div><div class="eyebrow">${won ? "Case closed" : "Fooled you"}</div><h2>${won ? "Players win!" : "Impostor wins!"}</h2><p style="margin:10px 0 22px"><strong>${esc(imp.name)}</strong> was the impostor. The word was <strong>${esc(state.word)}</strong>.</p><div class="card stack" style="text-align:left">${state.players.map((p) => `<div><div style="display:flex;justify-content:space-between"><span>${esc(p.name)}${p.id === state.impostorId ? " 🎭" : ""}</span><strong>${state.voteCounts[p.id]} vote${state.voteCounts[p.id] === 1 ? "" : "s"}</strong></div><div class="score"><i style="width:${state.voteCounts[p.id] / max * 100}%"></i></div></div>`).join("")}</div>${state.me.id === state.hostId ? '<button class="primary" id="again" style="width:100%;margin-top:14px">Play another round</button>' : '<p style="margin-top:18px">Waiting for the host to start another round.</p>'}</section>`);
   if (state.me.id === state.hostId) document.querySelector("#again").onclick = () => act("again");
 }
-function startRevealCountdown(endsAt) {
-  if (revealFrame) cancelAnimationFrame(revealFrame);
-  const tick = () => {
-    const bar = document.querySelector("#reveal-countdown-bar");
-    if (!bar) return;
-    const progress = Math.max(0, Math.min(1, (endsAt - Date.now()) / 6000));
-    bar.style.transform = `scaleX(${progress})`;
-    if (progress > 0) {
-      revealFrame = requestAnimationFrame(tick);
-    } else {
-      revealFrame = null;
-      refresh();
-    }
-  };
-  tick();
-}
 function render() {
-  if (revealFrame) {
-    cancelAnimationFrame(revealFrame);
-    revealFrame = null;
-  }
   ({ lobby, reveal, clues, decision, voting, result }[state.phase] || home)();
+  if (state?.phase) wireRoomControls();
+}
+function wireRoomControls() {
+  const leave = document.querySelector("#leave-game");
+  if (leave) leave.onclick = leaveGame;
+  const backLobby = document.querySelector("#back-lobby");
+  if (backLobby) backLobby.onclick = () => act("lobby");
 }
 async function refresh() { if (!session) return home(); try { const next = await api("state"); const signature = JSON.stringify(next); state = next; if (signature !== lastRender) { lastRender = signature; render(); } } catch(e) { stopPolling(); session = null; localStorage.removeItem("lying-session"); notify(e.message); home(); } }
 function startPolling() { stopPolling(); poller = setInterval(refresh, 1400); }
