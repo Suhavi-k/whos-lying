@@ -10,10 +10,16 @@ const rooms = new Map();
 
 const PACKS = {
   "Everyday Things": ["Umbrella", "Toothbrush", "Backpack", "Mirror", "Candle", "Pillow", "Key", "Scissors", "Clock", "Sunglasses"],
-  "Food & Drink": ["Pizza", "Sushi", "Popcorn", "Pancake", "Lemonade", "Chocolate", "Burger", "Mango", "Coffee", "Noodles"],
+  "Food & Drink":["Pizza", "Burger", "Pasta", "Sushi", "Tacos", "Sandwich", "Noodles", "Biryani", "Curry", "Salad", "Fries", "Ice Cream", "Chocolate", "Cake", "Donut", "Cookie", "Pancake", "Waffle", "Dumpling", "Momos", "Popcorn", "Apple", "Banana", "Mango", "Orange", "Watermelon", "Strawberry", "Grapes", "Cheese", "Butter", "Rice", "Bread", "Soup", "Omelette", "Hot Dog", "Shawarma", "Samosa", "Dosa", "Idli", "Pav Bhaji""Lemonade", "Coffee"],
   "Places": ["Airport", "Library", "Beach", "Hospital", "Museum", "Cinema", "School", "Zoo", "Restaurant", "Stadium"],
-  "Animals": ["Penguin", "Octopus", "Giraffe", "Dolphin", "Kangaroo", "Butterfly", "Panda", "Crocodile", "Owl", "Rabbit"],
-  "Entertainment": ["Superhero", "Karaoke", "Video game", "Magic trick", "Cartoon", "Concert", "Podcast", "Board game", "Movie", "Circus"]
+  "Animals": ["Dog", "Cat", "Lion", "Tiger", "Elephant", "Giraffe", "Zebra", "Kangaroo", "Panda", "Bear", "Wolf", "Fox", "Rabbit", "Deer", "Horse", "Cow", "Goat", "Sheep", "Pig", "Monkey", "Gorilla", "Dolphin", "Shark", "Whale", "Penguin", "Owl", "Eagle", "Peacock", "Crocodile", "Snake", "Turtle", "Frog", "Camel", "Koala", "Octopus", "Flamingo", "Cheetah", "Rhino", "Hippopotamus", "Squirrel"],
+  "Entertainment": ["Superhero", "Karaoke", "Video game", "Magic trick", "Cartoon", "Concert", "Podcast", "Board game", "Movie", "Circus"],
+  "Countries": ["India", "Japan", "China", "United States", "Canada", "Brazil", "Australia", "Germany", "France", "Italy", "Spain", "Russia", "South Korea", "North Korea", "Mexico", "Argentina", "Egypt", "South Africa", "Nepal", "Bhutan", "Pakistan", "Bangladesh", "Sri Lanka", "New Zealand", "Norway", "Sweden", "Finland", "Iceland", "Switzerland", "Singapore"],
+  "Video Games": ["Minecraft", "Valorant", "Fortnite", "Roblox", "PUBG", "Apex Legends", "Rocket League", "GTA V", "Terraria", "Among Us", "Clash Royale", "Clash of Clans", "Candy Crush", "Elden Ring", "Dark Souls", "Hollow Knight", "Celeste", "Stardew Valley", "Overwatch", "Call of Duty", "EA FC", "League of Legends", "Dota 2", "Genshin Impact", "Fall Guys", "Geometry Dash", "The Sims", "Skyrim", "The Legend of Zelda"],
+  "Movies": ["Titanic", "Avatar", "Frozen", "Cars", "Coco", "Moana", "Up", "Jaws", "Inception", "Interstellar", "Joker", "Gladiator", "Shrek", "Minions", "Barbie", "Oppenheimer", "Dune", "Top Gun", "The Batman", "Superman", "Spider-Man", "Iron Man", "Avengers", "Deadpool", "The Lion King", "Jurassic Park", "Harry Potter", "Finding Nemo", "Toy Story", "Inside Out"],
+  "TV Shows": ["Friends", "Stranger Things", "Wednesday", "Squid Game", "Breaking Bad", "Better Call Saul", "The Office", "Brooklyn Nine-Nine", "Game of Thrones", "House of the Dragon", "Loki", "WandaVision", "The Boys", "Arcane", "Money Heist", "Dark", "Sherlock", "Lucifer", "The Witcher", "The Last of Us"],
+  "Sports": ["Football", "Cricket", "Basketball", "Tennis", "Badminton", "Volleyball", "Baseball", "Rugby", "Hockey", "Chess", "Boxing", "Wrestling", "Swimming", "Cycling", "Running", "Gymnastics", "Golf", "Table Tennis", "Formula 1", "Kabaddi"],
+  "Technology": ["Phone", "Laptop", "Keyboard", "Mouse", "Monitor", "CPU", "GPU", "Headphones", "Earbuds", "Charger", "WiFi", "Bluetooth", "USB", "Camera", "Drone", "Smartwatch", "Tablet", "Printer", "Microphone", "Projector"]
 };
 
 const id = (n = 18) => randomBytes(n).toString("base64url");
