@@ -81,6 +81,13 @@ function clues() {
   app.innerHTML = shell(`<section><div class="eyebrow">Clue round ${state.clueRound}</div><h2>Say just enough.</h2>${reference}<div class="turn"><span class="pulse"></span><div><span class="tiny">CURRENT TURN</span><br><strong>${esc(turn?.name)}${state.myTurn ? " — that’s you!" : ""}</strong></div></div>${currentClues.length ? `<div class="clues">${currentClues.map((c) => `<div class="clue"><strong>${esc(c.name)}</strong><span>${esc(c.text)}</span></div>`).join("")}</div>` : ""}${state.myTurn ? `<div class="card stack"><label>Your clue<input id="clue" maxlength="80" placeholder="A related word or short phrase"></label><button class="primary" id="submit-clue">Lock in clue</button></div>` : `<div class="card center"><p>Waiting for the current clue.</p></div>`}</section>`);
   if (state.myTurn) document.querySelector("#submit-clue").onclick = () => act("clue", { clue:document.querySelector("#clue").value });
 }
+function clueReview() {
+  const reference = state.role === "impostor"
+    ? `<div class="round-reference impostor-ref"><span>Category</span><strong>${esc(state.category)}</strong><small>Secret word unknown</small></div>`
+    : `<div class="round-reference"><span>${esc(state.category)}</span><strong>${esc(state.word)}</strong></div>`;
+  const currentClues = state.clues.filter((clue) => clue.round === state.clueRound);
+  app.innerHTML = shell(`<section><div class="eyebrow">Clue round ${state.clueRound} complete</div><h2>Review the clues.</h2>${reference}<div class="clues">${currentClues.map((c) => `<div class="clue"><strong>${esc(c.name)}</strong><span>${esc(c.text)}</span></div>`).join("")}</div><div class="card center"><p>Everyone gets a moment to read the final clue before deciding.</p></div></section>`);
+}
 function decision() {
   app.innerHTML = shell(`<section class="center"><div class="eyebrow">Round ${state.clueRound} complete</div><h2>Ready to accuse?</h2><p>Everyone chooses. The majority decides; a tie goes to voting.</p>${state.decided ? `<div class="card" style="margin-top:22px"><span class="pill">CHOICE LOCKED</span><p style="margin-top:9px">${state.decisionCount} of ${state.players.length} players have chosen.</p></div>` : `<div class="decision-grid"><button class="choice-card" data-choice="clues"><span>💬</span><strong>Another clue round</strong><small>Everyone gives one more clue</small></button><button class="choice-card danger" data-choice="vote"><span>🗳️</span><strong>Vote now</strong><small>Choose who you think is lying</small></button></div>`}</section>`);
   if (!state.decided) app.querySelectorAll("[data-choice]").forEach((button) => button.onclick = () => act("decide", { choice:button.dataset.choice }));
@@ -100,7 +107,7 @@ function result() {
   if (state.me.id === state.hostId) document.querySelector("#again").onclick = () => act("again");
 }
 function render() {
-  ({ lobby, reveal, clues, decision, voting, result }[state.phase] || home)();
+  ({ lobby, reveal, clues, clueReview, decision, voting, result }[state.phase] || home)();
   if (state?.phase) wireRoomControls();
 }
 function wireRoomControls() {
