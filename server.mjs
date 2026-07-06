@@ -59,6 +59,11 @@ function roomFor(req, payload) {
 
 function publicState(room, viewer) {
   if (room.phase === "reveal" && room.revealEndsAt && Date.now() >= room.revealEndsAt) room.phase = "clues";
+  if (room.phase === "clueReview" && room.reviewEndsAt && Date.now() >= room.reviewEndsAt) {
+    room.decisions = new Map();
+    room.phase = "decision";
+    room.reviewEndsAt = null;
+  }
   const myTurn = room.phase === "clues" && room.turnOrder[room.turnIndex] === viewer.id;
   const voted = room.votes.has(viewer.id);
   const base = {
@@ -85,7 +90,8 @@ function publicState(room, viewer) {
     kickThreshold: Math.floor(room.players.length / 2) + 1,
     myKickVoteTarget: [...(room.kickVotes || new Map()).entries()].find(([, voters]) => voters.has(viewer.id))?.[0] || null,
     kickVotes: Object.fromEntries(room.players.map((p) => [p.id, room.kickVotes?.get(p.id)?.size || 0])),
-    revealEndsAt: room.phase === "reveal" ? room.revealEndsAt : null
+    revealEndsAt: room.phase === "reveal" ? room.revealEndsAt : null,
+    reviewEndsAt: room.phase === "clueReview" ? room.reviewEndsAt : null
   };
   if (room.phase === "result") {
     base.word = room.word;
@@ -101,6 +107,7 @@ function resetToLobby(room) {
   room.word = null;
   room.impostorId = null;
   room.revealEndsAt = null;
+  room.reviewEndsAt = null;
   room.turnOrder = [];
   room.turnIndex = 0;
   room.clues = [];
@@ -133,7 +140,13 @@ function removePlayer(room, targetId) {
 
 function startRound(room) {
   const source = room.customWords.length ? room.customWords : Object.entries(PACKS).flatMap(([category, words]) => words.map((word) => ({ category, word })));
-  const pick = source[randomInt(source.length)];
+  room.recentWords ||= [];
+  const fresh = source.filter((entry) => !room.recentWords.includes(`${entry.category}::${entry.word}`));
+  const pickFrom = fresh.length ? fresh : source;
+  if (!fresh.length) room.recentWords = [];
+  const pick = pickFrom[randomInt(pickFrom.length)];
+  room.recentWords.push(`${pick.category}::${pick.word}`);
+  room.recentWords = room.recentWords.slice(-Math.min(20, Math.max(3, source.length - 1)));
   room.category = pick.category;
   room.word = pick.word;
   room.impostorId = nextImpostor(room);
@@ -146,6 +159,7 @@ function startRound(room) {
   room.decisions = new Map();
   room.readyIds = new Set();
   room.revealEndsAt = Date.now() + 6000;
+  room.reviewEndsAt = null;
   room.result = null;
   room.phase = "reveal";
 }
@@ -156,7 +170,7 @@ const actions = {
     if (!name) throw Error("Enter your name");
     const roomCode = code();
     const player = { id: id(8), token: id(), name };
-    rooms.set(roomCode, { code: roomCode, hostId: player.id, players: [player], phase: "lobby", settings: { maxPlayers: 10 }, customWords: [], category: null, word: null, impostorId: null, lastImpostorId: null, impostorQueue: [], turnOrder: [], turnIndex: 0, clues: [], clueRound: 1, votes: new Map(), decisions: new Map(), readyIds: new Set(), kickVotes: new Map(), revealEndsAt: null, result: null, updatedAt: Date.now() });
+    rooms.set(roomCode, { code: roomCode, hostId: player.id, players: [player], phase: "lobby", settings: { maxPlayers: 10 }, customWords: [], recentWords: [], category: null, word: null, impostorId: null, lastImpostorId: null, impostorQueue: [], turnOrder: [], turnIndex: 0, clues: [], clueRound: 1, votes: new Map(), decisions: new Map(), readyIds: new Set(), kickVotes: new Map(), revealEndsAt: null, reviewEndsAt: null, result: null, updatedAt: Date.now() });
     return { code: roomCode, token: player.token };
   },
   join(payload) {
@@ -248,8 +262,8 @@ const actions = {
     room.clues.push({ playerId: player.id, name: player.name, text, round: room.clueRound });
     room.turnIndex += 1;
     if (room.turnIndex >= room.turnOrder.length) {
-      room.decisions = new Map();
-      room.phase = "decision";
+      room.reviewEndsAt = Date.now() + 4500;
+      room.phase = "clueReview";
     }
     return { ok: true };
   },
@@ -331,7 +345,7 @@ http.createServer(async (req, res) => {
       "Content-Type": types[extname(file)] || "application/octet-stream",
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "same-origin",
-      "Cache-Control": extname(file) === ".html" ? "no-cache" : "public, max-age=3600"
+      "Cache-Control": "no-store"
     }); res.end(data);
   } catch { res.writeHead(404); res.end("Not found"); }
 }).listen(PORT, "0.0.0.0", () => console.log(`Who’s Lying is ready at http://localhost:${PORT}`));
