@@ -10,7 +10,7 @@ const rooms = new Map();
 
 const PACKS = {
   "Everyday Things": ["Umbrella", "Toothbrush", "Backpack", "Mirror", "Candle", "Pillow", "Key", "Scissors", "Clock", "Sunglasses"],
-  "Food & Drink":["Pizza", "Burger", "Pasta", "Sushi", "Tacos", "Sandwich", "Noodles", "Biryani", "Curry", "Salad", "Fries", "Ice Cream", "Chocolate", "Cake", "Donut", "Cookie", "Pancake", "Waffle", "Dumpling", "Momos", "Popcorn", "Apple", "Banana", "Mango", "Orange", "Watermelon", "Strawberry", "Grapes", "Cheese", "Butter", "Rice", "Bread", "Soup", "Omelette", "Hot Dog", "Shawarma", "Samosa", "Dosa", "Idli", "Pav Bhaji""Lemonade", "Coffee"],
+  "Food & Drink":["Pizza", "Burger", "Pasta", "Sushi", "Tacos", "Sandwich", "Noodles", "Biryani", "Curry", "Salad", "Fries", "Ice Cream", "Chocolate", "Cake", "Donut", "Cookie", "Pancake", "Waffle", "Dumpling", "Momos", "Popcorn", "Apple", "Banana", "Mango", "Orange", "Watermelon", "Strawberry", "Grapes", "Cheese", "Butter", "Rice", "Bread", "Soup", "Omelette", "Hot Dog", "Shawarma", "Samosa", "Dosa", "Idli", "Pav Bhaji", "Lemonade", "Coffee"],
   "Places": ["Airport", "Library", "Beach", "Hospital", "Museum", "Cinema", "School", "Zoo", "Restaurant", "Stadium"],
   "Animals": ["Dog", "Cat", "Lion", "Tiger", "Elephant", "Giraffe", "Zebra", "Kangaroo", "Panda", "Bear", "Wolf", "Fox", "Rabbit", "Deer", "Horse", "Cow", "Goat", "Sheep", "Pig", "Monkey", "Gorilla", "Dolphin", "Shark", "Whale", "Penguin", "Owl", "Eagle", "Peacock", "Crocodile", "Snake", "Turtle", "Frog", "Camel", "Koala", "Octopus", "Flamingo", "Cheetah", "Rhino", "Hippopotamus", "Squirrel"],
   "Entertainment": ["Superhero", "Karaoke", "Video game", "Magic trick", "Cartoon", "Concert", "Podcast", "Board game", "Movie", "Circus"],
