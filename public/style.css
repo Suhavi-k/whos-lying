@@ -1,5 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@700;800&display=swap');
-:root { --ink:#f7f4ed; --muted:#aaa9b6; --bg:#0b31f0; --card:#1a1d2a; --line:#303444; --acid:#009dff; --purple:#9b8cff; --red:#ff6b6b; }
+:root { --ink:#f7f4ed; --muted:#aaa9b6; --bg:#10121c; --card:#1a1d2a; --line:#303444; --acid:#d9ff57; --purple:#9b8cff; --red:#ff6b6b; }
 * { box-sizing:border-box; }
 body { margin:0; min-height:100vh; color:var(--ink); background:radial-gradient(circle at 20% 0%,#272145 0,transparent 35%),radial-gradient(circle at 100% 80%,#183e39 0,transparent 35%),var(--bg); font-family:'DM Sans',sans-serif; }
 .noise { position:fixed; inset:0; pointer-events:none; opacity:.035; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E"); }
